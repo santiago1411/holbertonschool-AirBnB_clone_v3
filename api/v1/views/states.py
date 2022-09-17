@@ -1,60 +1,73 @@
 #!/usr/bin/python3
-"""Module fro State endpoints"""
-from flask import jsonify, make_response, request
+"""
+retrieve an object into a valid JSON
+"""
+
 from api.v1.views import app_views
 from models import storage
 from models.state import State
+from flask import jsonify, abort, request
 
 
-@app_views.route("/states", strict_slashes=False,
-                 methods=['GET'], defaults={"state_id": None})
-@app_views.route("/state/<state_id>", methods=['GET'])
-def get_state(state_id):
-    """GET /state API route"""
-    if state_id is None:
-        states = [v.to_dict() for v in storage.all("State").values()]
-        return jsonify(states)
-    state = storage.get(State, state_id)
-    if not state:
-        return make_response(jsonify({"error": "Not found"}), 404)
-    return jsonify(state.to_dict())
+@app_views.route('/states', strict_slashes=False)
+def get_states():
+    """Retrieves the list of all State objects"""
+    all_obj = storage.all(State)
+    lista = []
+    for obj in all_obj.values():
+        lista.append(obj.to_dict())
+    return jsonify(lista)
 
 
-@app_views.route("/states/<state_id>", methods=['DELETE'])
-def delete_state(state_id):
-    """DELETE /state API route"""
-    state = storage.get(State, state_id)
-    if not state:
-        return make_response(jsonify({"error": "Not found"}), 404)
-    storage.delete(state)
+@app_views.route('states/<state_id>', strict_slashes=False, methods=['GET'])
+def get_states_id(state_id):
+    """Retrieves the list of all State objects with id"""
+    linked_states = storage.get(State, state_id)
+    if linked_states:
+        return jsonify(linked_states.to_dict())
+    else:
+        abort(404)
+
+
+@app_views.route('states/<state_id>', strict_slashes=False, methods=['DELETE'])
+def delete_states(state_id):
+    """Deletes a state"""
+    linked_states = storage.get(State, state_id)
+    if linked_states:
+        storage.delete(linked_states)
+        storage.save()
+        return {}, 200
+    else:
+        abort(404)
+
+
+@app_views.route('/states', strict_slashes=False, methods=['POST'])
+def post_states():
+    """transform the HTTP body request to a dictionary"""
+    if not request.json:
+        abort(400)
+    if 'name' not in request.json:
+        return ("Missing name"), 400
+    data = request.json
+    new_inst = State()
+    for k, v in data.items():
+        setattr(new_inst, k, v)
+    storage.new(new_inst)
     storage.save()
-    return make_response(jsonify({}), 200)
+    return new_inst.to_dict(), 201
 
 
-@app_views.route("/states", strict_slashes=False, methods=["POST"])
-def post_state():
-    """POST /state API route"""
-    data = request.get_json(force=True, silent=True)
-    if not data:
-        return make_response(jsonify({"error": "Not a JSON"}), 400)
-    if "name" not in data:
-        return make_response(jsonify({"error": "Missing name"}), 400)
-    s = State(**data)
-    s.save()
-    return make_response(jsonify(s.to_dict()), 201)
-
-
-@app_views.route("/states/<state_id>", methods=["PUT"])
-def put_state(state_id):
-    """PUT /state API route"""
-    state = storage.get(State, state_id)
-    if not state:
-        return make_response(jsonify({"error": "Not found"}), 404)
-    data = request.get_json(force=True, silent=True)
-    if not data:
-        return make_response(jsonify({"error": "Not a JSON"}), 400)
-    for key, value in data.items():
-        if key not in ["id", "created_at", "updated_at"]:
-            setattr(state, key, value)
-    state.save()
-    return make_response(jsonify(state.to_dict()), 200)
+@app_views.route('states/<state_id>', strict_slashes=False, methods=['PUT'])
+def put_states(state_id):
+    """Update a name of state"""
+    linked_states = storage.get(State, state_id)
+    if linked_states:
+        data = request.json
+        if not data:
+            return ("Not a JSON"), 400
+        for k, v in data.items():
+            setattr(linked_states, k, v)
+            storage.save()
+            return linked_states.to_dict(), 200
+    else:
+        abort(404)
